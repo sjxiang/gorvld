@@ -1,0 +1,6 @@
+# 依赖文件夹
+vendor/
+
+# gorvld 文件
+out/
+gorvld
