@@ -1,11 +1,7 @@
 package linker
 
 import (
-	"bytes"
-	"debug/elf"
-	"encoding/binary"
 	"fmt"
-
 	"github.com/sjxiang/gorvld/pkg/utils"
 )
 
@@ -19,56 +15,41 @@ type InputFile struct {
 func NewInputFile(file *File) InputFile {
 	f := InputFile{ File: file }
 
+	// 确保不小于 ELF header 长度
 	if len(file.Contents) < EhdrSize {
 		utils.Fatal("file too small")
 	}
 
+	// 校验 ELF header magic number
 	if !CheckMagic(file.Contents) {
 		utils.Fatal("not an ELF file")
 	}
 
-	ehdr := Ehdr{}
-	reader := bytes.NewReader(file.Contents)
-	err := binary.Read(reader, binary.LittleEndian, &ehdr)  // 小端模式，从 reader 中读取数据，写入到 ehdr 中
-	utils.MustNo(err)
+	// 填充 ELF header
+	ehdr := FillIntoEhdr(file.Contents)
+	
+	contents := file.Contents[ehdr.ShOff:]  // 剩余都是 Section header table 
 
-	contents := file.Contents[ehdr.ShOff:]
 
-	// 
-	shdr := utilRead(contents)  // 辅助函数
+	// 填充 Section header table
+	numSections := int64(ehdr.ShNum)  
+	for numSections >= 1 {
 
-	numSections := int64(ehdr.ShNum)
-	if numSections == 0 {
-		numSections = int64(shdr.Size)
-	}
+		// 填充 Section header 
+		shdr := FillIntoShdr(contents)
+		f.ElfSections = append(f.ElfSections, shdr)
 
-	f.ElfSections = []Shdr{ shdr }
-	for numSections > 1 {
 		contents = contents[ShdrSize:]
-		f.ElfSections = append(f.ElfSections, utilRead(contents))
 		numSections--
 	}
 
 
-	// section header
-	shstrndx := int64(ehdr.ShStrndx)
-	if ehdr.ShStrndx == uint16(elf.SHN_XINDEX) {  // 即 65535
-		shstrndx = int64(shdr.Link)
-	}
-
+	// section header table 索引，指向 shstrtab 
+	shstrndx := int64(ehdr.ShStrndx)  
+	// 保存 section name 
 	f.ShStrtab = f.GetBytesFromIdx(shstrndx)
+	
 	return f
-}
-
-
-func utilRead(data []byte) Shdr {
-	shdr := Shdr{}
-
-	reader := bytes.NewReader(data)
-	err := binary.Read(reader, binary.LittleEndian, &shdr)
-	utils.MustNo(err)
-
-	return shdr
 }
 
 
@@ -81,6 +62,19 @@ func (f *InputFile) GetBytesFromShdr(s *Shdr) []byte {
 	return f.File.Contents[s.Offset : s.Offset+s.Size]
 }
 
+// 根据下标，找 section header，再根据 header 中偏移字段读取数据
 func (f InputFile) GetBytesFromIdx(idx int64) []byte {
 	return f.GetBytesFromShdr(&f.ElfSections[idx])
+}
+
+
+func (f *InputFile) FindSection(typeField uint32) *Shdr {
+	for i := 0; i < len(f.ElfSections); i++ {
+		shdr := &f.ElfSections[i]
+		if shdr.Type == typeField {
+			return shdr
+		}
+	} 
+
+	return nil
 }

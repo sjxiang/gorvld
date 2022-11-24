@@ -3,47 +3,28 @@
 
 
 ```
-从零开始使用 Go 语言实现一个 RV64GC（RISC-V 64 位）架构的链接器，可以正确地链接相对简单的 C 程序
+从零开始使用 Go 语言实现一个链接器，可以正确地链接相对简单的 C 程序
+
+PS：限定版 minimal.o，因为发现可以省掉太多繁琐细节。
 
 ```
 
 
+## ELF 文件构成
 ```
 
-$ sudo apt install -y gcc-10-riscv64-linux-gnu qemu-user
+ELF header
+program header table （对 section，一对多映射，我的做法是优化掉，冗余了）
+.init
+.text
+...       各类 Section 组成
+.strtab
+section header table （对 section，一对一映射）
 
-$ sudo ln -sf /usr/bin/riscv64-linux-gnu-gcc-10 /usr/bin/riscv64-linux-gnu-gcc  # alias，别名
-
-$ chmod 755 ./tests/init.sh
-
-$ hexdump -C -n 8 out/tests/hello/a.o   # 打印前 8 bit，magic number
-
-$ readelf -S out/tests/hello/a.o  # 打印 section header
-
-```
-
-# ELF 文件结构
-
-```
-1. ELF header
-2. Program header table （1 对 多） 0
-3. Sections
-    .text
-    .rodata
-    ...
-    .data
-
-4. Section header table （1 对 1）
 ```
 
 
 
-
-```
-第二课：继续读取 ELF 文件
-在本节课中，我们继续读取并解析了 object file 中几个重要的 section 类型。
-
-```
 ```
 
 第三课：解析链接器参数
